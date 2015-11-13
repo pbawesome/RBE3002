@@ -191,8 +191,6 @@ class GridMap:
             print "Open set length: " ,len(self.openSet)
             #sort the list in order of increase fScore (lowest first)
             self.openSet.sort(key=lambda x: x.fScore)
-            for cell in self.openSet:
-                print cell.fScore
             #pop the lowest off the open set and add it to the closed set
             currentCell = self.openSet.pop(0)
 
@@ -215,10 +213,15 @@ class GridMap:
                     tentativeGScore = self.map[currentCell.point.y][currentCell.point.x].gScore + 1
                     if(not self.isPointInOpenSet(neighbor)):
                         self.openSet.append(neighbor)
+                        self.map[neighbor.point.y][neighbor.point.x].cameFrom = currentCell
+                        self.updateGScore(neighbor.point.x, neighbor.point.y, tentativeGScore)
+                        self.calculateFScore(neighbor.point.x, neighbor.point.y)
                     elif not (tentativeGScore >= self.map[neighbor.point.y][neighbor.point.x].gScore):
                         self.map[neighbor.point.y][neighbor.point.x].cameFrom = currentCell
                         self.updateGScore(neighbor.point.x, neighbor.point.y, tentativeGScore)
                         self.calculateFScore(neighbor.point.x, neighbor.point.y)
+
+
 
 
 
@@ -253,21 +256,25 @@ class GridMap:
         if(currentY - 1 >= 0):
             #is this tile empty space? (== 0)
             if(self.map[currentY-1][currentX].blocked == 0):
+                print "This neighbor is marked as valid:", currentX, currentY-1
                 validNeighbors.append(self.map[currentY-1][currentX]);
 
         #check node below
         if(currentY + 1 < self.height):
             if(self.map[currentY+1][currentX].blocked == 0):
+                print "This neighbor is marked as valid:", currentX, currentY+1
                 validNeighbors.append(self.map[currentY+1][currentX]);
 
         #check node left
         if(currentX - 1 >= 0):
             if(self.map[currentY][currentX-1].blocked == 0):
+                print "This neighbor is marked as valid:", currentX-1, currentY
                 validNeighbors.append(self.map[currentY][currentX-1]);
 
         #check node right
         if(currentX + 1 < self.width):
             if(self.map[currentY][currentX+1].blocked == 0):
+                print "This neighbor is marked as valid:", currentX+1, currentY
                 validNeighbors.append(self.map[currentY][currentX+1]);
 
         return validNeighbors
@@ -276,11 +283,16 @@ class GridMap:
 
 
 g = GridMap(4, 6)
-g.updateFScore(2,2,0)
+g.map[0][1].blocked = 100
+g.map[1][1].blocked = 100
+g.map[2][1].blocked = 100
+g.map[3][1].blocked = 100
+g.map[5][1].blocked = 100
+print g.map[5][1].blocked
 g.printScores()
 g.printObstacles()
 g.printCoords()
-g.aStarSearch(1,1,3,3)
+g.aStarSearch(0,0,3,3)
 print "\n\n\n"
 g.printScores()
 
