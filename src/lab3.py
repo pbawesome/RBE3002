@@ -200,6 +200,7 @@ class GridMap:
 
             #if currentCell is the goal....
             if(currentCell.point.x == goalX and currentCell.point.y == goalY):
+                self.reconstructPath(currentCell)
                 return 0
 
             #check neighbors
@@ -223,7 +224,16 @@ class GridMap:
 
 
 
-
+    #returns a list of the cells that needed to be visted to reach a goal
+    def reconstructPath(self, currentCell):
+        totalPath = []
+        totalPath.append(currentCell)
+        while(currentCell.cameFrom != None):
+            currentCell = currentCell.cameFrom
+            totalPath.append((currentCell))
+        totalPath.reverse()
+        for cell in totalPath:
+            print "X:", cell.point.x, "Y:", cell.point.y
 
 
     #returns if a given point is in the closed set.
