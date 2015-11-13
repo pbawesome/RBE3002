@@ -1,9 +1,11 @@
 #!/usr/bin/env python
+import gridCells
 
 import rospy
 import roslib
 import time
 import math
+
 from numpy import *
 from nav_msgs.msg import OccupancyGrid, GridCells, Path, Odometry
 from geometry_msgs.msg import Point, Pose, PoseStamped, Twist, PoseWithCovarianceStamped, Quaternion
@@ -19,16 +21,6 @@ xEnd = 0
 yEnd = 0
 thetaEnd = 0
 
-
-def realWorldMap(data):
-# map listener
-    global mapData, grid
-    global width
-    global height
-    grid = data
-    mapData = data.data
-    width = data.info.width
-    height = data.info.height
 
 def readGoal(msg):
     px = msg.pose.position.x
@@ -58,51 +50,28 @@ def startCallBack(data):
     thetaInit = yaw * 180.0 / math.pi
 	
 	
-'''
 if __name__ == '__main__':
     try:
     	global worldMap
     	global target
-        global cellPub
+        global openPub
 
     	AMap = 0
     	worldMap = 0
     	path = 0
 
     	rospy.init_node('lab3')
-    	worldMapSub = rospy.Subscriber('/map', OccupancyGrid, readWorldMap)
+	gridCells.initGridCell()
     	markerSub = rospy.Subscriber('/move_base_simple/goalrbe', PoseStamped, readGoal)
-    	cellPub = rospy.Publisher('/cell_path', GridCells)
-    	pathPub = rospy.Publisher('/path_path', Path)
+    	#pathPub = rospy.Publisher('/path_path', Path)
 
     	target = 0
     	start = 0
     	end = 0
     	while not rospy.is_shutdown():
-            publishGridCells()
+            gridCells.publishGridCells()
     except rospy.ROSInterruptException:
         pass
-'''
-
-def publishGridCells():
-    gridCells = GridCells()
-    gridCells.header.frame_id = "/map";
-    gridCells.header.stamp = rospy.Time.now();
-    gridCells.cell_width = 1
-    gridCells.cell_length = 1
-    
-    global cellPub
-    pointList = []
-    for x in range(5):
-        for y in range(5):
-            p = Point()
-            p.x = x
-            p.y = y
-            p.z = 0
-            pointList.append(p)
-    gridCells.cells = pointList
-    cellPub.publish(gridCells)
-
 
 
 class Cell:
@@ -283,7 +252,7 @@ class GridMap:
 
 
 
-
+'''
 g = GridMap(4, 6)
 g.map[0][1].blocked = 100
 g.map[1][1].blocked = 100
@@ -297,7 +266,7 @@ g.printCoords()
 g.aStarSearch(0,0,3,3)
 print "\n\n\n"
 g.printScores()
-
+'''
     # resolution and offset of the map
 
     # create a new instance of the map
