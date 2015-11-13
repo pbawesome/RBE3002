@@ -86,8 +86,10 @@ if __name__ == '__main__':
 
 def publishGridCells():
     gridCells = GridCells()
-    gridCells.cell_width = 5
-    gridCells.cell_length = 5
+    gridCells.header.frame_id = "/map";
+    gridCells.header.stamp = rospy.Time.now();
+    gridCells.cell_width = 1
+    gridCells.cell_length = 1
     
     global cellPub
     pointList = []
