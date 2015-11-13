@@ -103,6 +103,14 @@ def publishGridCells():
 
 
 
+
+#represents instance on the 2D array of GridCells
+#each cell stores its XY coordinate of the 2D array
+#its 3 scores needed for the A* algorithm
+#if there is an obstacle at the given location
+#   (0 == No Obstacle, 100 == Obstacle, -1 == Unknown)
+#cameFrom indicates which node led to this for path
+#reconstruction
 class Cell:
     def __init__(self,x,y, f, g, h, blocked):
         self.point = Point(x,y)
@@ -112,11 +120,17 @@ class Cell:
         self.blocked = blocked
         self.cameFrom = None
 
+#defines an x,y coordinate as an object
 class Point:
     def __init__(self, x, y):
         self.x = x
         self.y = y
 
+#grid map is a 2D array of a given width and height
+#w and h correspond to columns and rows of 2D array
+#map is the 2D array of cells
+#open set and closed set represent the frontier and
+#expanded nodes, respectively
 class GridMap:
     def __init__(self, width, height):
         self.width = width
@@ -124,29 +138,36 @@ class GridMap:
         self.openSet = []
         self.closedSet = []
         self.map = []
+        #populate the map with cell objects
         self.map = [[Cell(-1,-1,-1,-1,-1, 0) for x in range(width)] for x in range(height)]
+        #properly assign coordinates to the cell objects
         for y in range(self.height):
             for x in range(self.width):
                 self.map[y][x] = Cell(x,y,-1,-1,-1,0)
 
+    #update fScore to a given fScore
     def updateFScore(self, xPos, yPos, score):
         self.map[yPos][xPos].fScore = score
 
+    #calculate new fScore and store this in fScore,
+    #based on cell's gScore and hScore
     def calculateFScore(self, xPos, yPos):
         self.map[yPos][xPos].fScore = self.map[yPos][xPos].gScore + self.map[yPos][xPos].hScore
 
-
+    #update a node a position x,y gScore
     def updateGScore(self, xPos, yPos, score):
         self.map[yPos][xPos].gScore = score
-
+    #update a cell @ X,Y with new hScore
     def updateHScore(self, xPos, yPos, score):
         self.map[yPos][xPos].hScore = score
 
+    #update all 3 scores @ once
     def updateScores(self, xPos, yPos, f, g, h):
         self.updateFScore(xPos, yPos, f)
         self.updateGScore(xPos, yPos, g)
         self.updateHScore(xPos, yPos, h)
 
+    #formatted print of scores in grid
     def printScores(self):
         for y in range(self.height):
             for x in range(self.width):
@@ -154,22 +175,29 @@ class GridMap:
                 #print("[",self.map[y][x].fScore, self.map[y][x].gScore, self.map[y][x].hScore, "]",
             print " "
 
+    #formatted print of obstcles
     def printObstacles(self):
         for y in range(self.height):
             for x in range(self.width):
-                print "[",self.map[y][x].blocked, "]",
+                print("[ %3d ]" % (self.map[y][x].blocked))
             print " "
 
+    #formatted print of gridCells for verification
     def printCoords(self):
         for y in range(self.height):
             for x in range(self.width):
                 print "[",self.map[y][x].point.x, self.map[y][x].point.y, "]",
             print " "
+
+    #AStar search for a path from a start XY to a goal XY
+    #returns a list of grid cells on successful completion
     def aStarSearch(self, startX, startY, goalX, goalY):
+        #initialize open and closed sets to 0
         self.closedSet = []
         self.openSet = []
+
+        #need to add the start node to the open set
         self.openSet.append(self.map[startY][startX])
-        cameFrom = []
 
         for y in range(self.height):
             for x in range(self.width):
@@ -212,19 +240,25 @@ class GridMap:
                 if(not self.isPointInClosedSet(neighbor)):
                     #cost to move one square over (cardinal directions)
                     tentativeGScore = self.map[currentCell.point.y][currentCell.point.x].gScore + 1
+                    #add the neighbor to openset and update scores
                     if(not self.isPointInOpenSet(neighbor)):
                         self.openSet.append(neighbor)
                         self.map[neighbor.point.y][neighbor.point.x].cameFrom = currentCell
                         self.updateGScore(neighbor.point.x, neighbor.point.y, tentativeGScore)
                         self.calculateFScore(neighbor.point.x, neighbor.point.y)
+                    #only update if this is a better path to the node
                     elif not (tentativeGScore >= self.map[neighbor.point.y][neighbor.point.x].gScore):
                         self.map[neighbor.point.y][neighbor.point.x].cameFrom = currentCell
                         self.updateGScore(neighbor.point.x, neighbor.point.y, tentativeGScore)
                         self.calculateFScore(neighbor.point.x, neighbor.point.y)
 
+        return Nothing
+
 
 
     #returns a list of the cells that needed to be visted to reach a goal
+    #basically just recurse backwards through the list until you reach the 
+    #first cell (which has Nothing in its camefrom field)
     def reconstructPath(self, currentCell):
         totalPath = []
         totalPath.append(currentCell)
