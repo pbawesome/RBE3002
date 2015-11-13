@@ -58,7 +58,7 @@ def startCallBack(data):
     thetaInit = yaw * 180.0 / math.pi
 	
 	
-
+'''
 if __name__ == '__main__':
     try:
     	global worldMap
@@ -82,6 +82,7 @@ if __name__ == '__main__':
             publishGridCells()
     except rospy.ROSInterruptException:
         pass
+'''
 
 def publishGridCells():
     gridCells = GridCells()
@@ -101,6 +102,187 @@ def publishGridCells():
     cellPub.publish(gridCells)
 
 
+
+class Cell:
+    def __init__(self,x,y, f, g, h, blocked):
+        self.point = Point(x,y)
+        self.fScore = f
+        self.gScore = g
+        self.hScore = h
+        self.blocked = blocked
+        self.cameFrom = None
+
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+class GridMap:
+    def __init__(self, width, height):
+        self.width = width
+        self.height = height
+        self.openSet = []
+        self.closedSet = []
+        self.map = []
+        self.map = [[Cell(-1,-1,-1,-1,-1, 0) for x in range(width)] for x in range(height)]
+        for y in range(self.height):
+            for x in range(self.width):
+                self.map[y][x] = Cell(x,y,-1,-1,-1,0)
+
+    def updateFScore(self, xPos, yPos, score):
+        self.map[yPos][xPos].fScore = score
+
+    def calculateFScore(self, xPos, yPos):
+        self.map[yPos][xPos].fScore = self.map[yPos][xPos].gScore + self.map[yPos][xPos].hScore
+
+
+    def updateGScore(self, xPos, yPos, score):
+        self.map[yPos][xPos].gScore = score
+
+    def updateHScore(self, xPos, yPos, score):
+        self.map[yPos][xPos].hScore = score
+
+    def updateScores(self, xPos, yPos, f, g, h):
+        self.updateFScore(xPos, yPos, f)
+        self.updateGScore(xPos, yPos, g)
+        self.updateHScore(xPos, yPos, h)
+
+    def printScores(self):
+        for y in range(self.height):
+            for x in range(self.width):
+                print("[ %5d %5d %5d]" % (self.map[y][x].fScore, self.map[y][x].gScore, self.map[y][x].hScore)),
+                #print("[",self.map[y][x].fScore, self.map[y][x].gScore, self.map[y][x].hScore, "]",
+            print " "
+
+    def printObstacles(self):
+        for y in range(self.height):
+            for x in range(self.width):
+                print "[",self.map[y][x].blocked, "]",
+            print " "
+
+    def printCoords(self):
+        for y in range(self.height):
+            for x in range(self.width):
+                print "[",self.map[y][x].point.x, self.map[y][x].point.y, "]",
+            print " "
+    def aStarSearch(self, startX, startY, goalX, goalY):
+        self.closedSet = []
+        self.openSet = []
+        self.openSet.append(self.map[startY][startX])
+        cameFrom = []
+
+        for y in range(self.height):
+            for x in range(self.width):
+                #initialize fScores and gScores to 'infinity'
+                self.updateGScore(x,y,99999)
+                self.updateFScore(x,y,99999)
+
+                #calculate the heuristic score for each block
+                #use manhattan distance for now
+                manhat_dist = abs(x-goalX) + abs(y-goalY)
+                self.updateHScore(x,y, manhat_dist)
+
+        #set the gScore of start position to 0
+        self.updateGScore(startX, startY, 0)
+        self.calculateFScore(startX, startY)
+
+        #while openSet is not empty...
+        while(len(self.openSet) != 0):
+            print "Open set length: " ,len(self.openSet)
+            #sort the list in order of increase fScore (lowest first)
+            self.openSet.sort(key=lambda x: x.fScore)
+            for cell in self.openSet:
+                print cell.fScore
+            #pop the lowest off the open set and add it to the closed set
+            currentCell = self.openSet.pop(0)
+
+            print "Currently exploring:", currentCell.point.x, currentCell.point.y
+            self.closedSet.append(currentCell)
+
+
+            #if currentCell is the goal....
+            if(currentCell.point.x == goalX and currentCell.point.y == goalY):
+                return 0
+
+            #check neighbors
+            validNeighbors = self.getValidNeighbors(currentCell.point.x, currentCell.point.y)
+
+            #expand each neighbor
+            for neighbor in validNeighbors:
+                #if the neighbor hasn't been expanded yet
+                if(not self.isPointInClosedSet(neighbor)):
+                    #cost to move one square over (cardinal directions)
+                    tentativeGScore = self.map[currentCell.point.y][currentCell.point.x].gScore + 1
+                    if(not self.isPointInOpenSet(neighbor)):
+                        self.openSet.append(neighbor)
+                    elif not (tentativeGScore >= self.map[neighbor.point.y][neighbor.point.x].gScore):
+                        self.map[neighbor.point.y][neighbor.point.x].cameFrom = currentCell
+                        self.updateGScore(neighbor.point.x, neighbor.point.y, tentativeGScore)
+                        self.calculateFScore(neighbor.point.x, neighbor.point.y)
+
+
+
+
+    #returns if a given point is in the closed set.
+    #breaks immediately if the point is found
+    #if nothing found, return false
+    def isPointInClosedSet(self, p):
+        for cell in self.closedSet:
+            if(cell.point.x == p.point.x and cell.point.y == p.point.y):
+                return True
+        return False
+
+
+    #returns if a given point is in the open set.
+    #breaks immediately if the point is found
+    #if nothing found, return false
+    def isPointInOpenSet(self, p):
+        for cell in self.openSet:
+            if(cell.point.x == p.point.x and cell.point.y == p.point.y):
+                return True
+        return False
+
+
+    #returns a list of valid neighbors that arent out of bounds
+    #and arent blocked
+    def getValidNeighbors(self, currentX, currentY):
+        validNeighbors = []
+
+        #check node above
+        #make sure there's not a boundary issue
+        if(currentY - 1 >= 0):
+            #is this tile empty space? (== 0)
+            if(self.map[currentY-1][currentX].blocked == 0):
+                validNeighbors.append(self.map[currentY-1][currentX]);
+
+        #check node below
+        if(currentY + 1 < self.height):
+            if(self.map[currentY+1][currentX].blocked == 0):
+                validNeighbors.append(self.map[currentY+1][currentX]);
+
+        #check node left
+        if(currentX - 1 >= 0):
+            if(self.map[currentY][currentX-1].blocked == 0):
+                validNeighbors.append(self.map[currentY][currentX-1]);
+
+        #check node right
+        if(currentX + 1 < self.width):
+            if(self.map[currentY][currentX+1].blocked == 0):
+                validNeighbors.append(self.map[currentY][currentX+1]);
+
+        return validNeighbors
+
+
+
+
+g = GridMap(4, 6)
+g.updateFScore(2,2,0)
+g.printScores()
+g.printObstacles()
+g.printCoords()
+g.aStarSearch(1,1,3,3)
+print "\n\n\n"
+g.printScores()
 
     # resolution and offset of the map
 
