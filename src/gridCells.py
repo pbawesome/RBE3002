@@ -12,12 +12,25 @@ from tf.transformations import euler_from_quaternion
 resolution = 1
 width = 0
 height = 0
+mapData = 0
 
 def initGridCell():
     global openPub
     worldMapSub = rospy.Subscriber('/map', OccupancyGrid, readWorldMap)
     openPub = rospy.Publisher('/cell_path/open', GridCells, queue_size=10)
 
+def map1Dto2D(height,width,data):
+    h = height
+    w = width
+    map2D = [[0 for x in range(w)] for x in range(h)]
+    i = 0
+    for y in range(h):
+	for x in range(w):
+		map2D[x][y] = data[i]
+		i = i + 1
+    return map2D
+		
+	
 def readWorldMap(data):
 # map listener
     global mapData, grid

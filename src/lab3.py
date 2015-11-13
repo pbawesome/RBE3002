@@ -21,7 +21,6 @@ xEnd = 0
 yEnd = 0
 thetaEnd = 0
 
-
 def readGoal(msg):
     px = msg.pose.position.x
     py = msg.pose.position.y
@@ -48,30 +47,6 @@ def startCallBack(data):
     xInit = px
     yInit = py
     thetaInit = yaw * 180.0 / math.pi
-	
-	
-if __name__ == '__main__':
-    try:
-    	global worldMap
-    	global target
-        global openPub
-
-    	AMap = 0
-    	worldMap = 0
-    	path = 0
-
-    	rospy.init_node('lab3')
-	gridCells.initGridCell()
-    	markerSub = rospy.Subscriber('/move_base_simple/goalrbe', PoseStamped, readGoal)
-    	#pathPub = rospy.Publisher('/path_path', Path)
-
-    	target = 0
-    	start = 0
-    	end = 0
-    	while not rospy.is_shutdown():
-            gridCells.publishGridCells()
-    except rospy.ROSInterruptException:
-        pass
 
 
 class Cell:
@@ -90,15 +65,28 @@ class Point:
 
 class GridMap:
     def __init__(self, width, height):
-        self.width = width
-        self.height = height
-        self.openSet = []
-        self.closedSet = []
-        self.map = []
-        self.map = [[Cell(-1,-1,-1,-1,-1, 0) for x in range(width)] for x in range(height)]
-        for y in range(self.height):
-            for x in range(self.width):
-                self.map[y][x] = Cell(x,y,-1,-1,-1,0)
+	self.width = width
+	self.height = height
+	self.openSet = []
+	self.closedSet = []
+	self.map = []
+	#populate the map with cell objects
+	self.map = [[Cell(-1,-1,-1,-1,-1, 0) for x in range(width)] for x in range(height)]
+	#properly assign coordinates to the cell objects
+	for y in range(self.height):
+	    for x in range(self.width):
+	        self.map[y][x] = Cell(x,y,-1,-1,-1,0)
+
+    # def __init__(self, width, height,data2D):
+    #     self.width = width
+    #     self.height = height
+    #     self.openSet = []
+    #     self.closedSet = []
+    #     self.map = []
+    #     self.map = [[Cell(-1,-1,-1,-1,-1, 0) for x in range(width)] for x in range(height)]
+    #     for y in range(self.height):
+    #         for x in range(self.width):
+    #             self.map[y][x] = Cell(x,y,-1,-1,-1,data2D[x][y])
 
     def updateFScore(self, xPos, yPos, score):
         self.map[yPos][xPos].fScore = score
@@ -227,33 +215,33 @@ class GridMap:
         if(currentY - 1 >= 0):
             #is this tile empty space? (== 0)
             if(self.map[currentY-1][currentX].blocked == 0):
-                print "This neighbor is marked as valid:", currentX, currentY-1
+                # print "This neighbor is marked as valid:", currentX, currentY-1
                 validNeighbors.append(self.map[currentY-1][currentX]);
 
         #check node below
         if(currentY + 1 < self.height):
             if(self.map[currentY+1][currentX].blocked == 0):
-                print "This neighbor is marked as valid:", currentX, currentY+1
+                # print "This neighbor is marked as valid:", currentX, currentY+1
                 validNeighbors.append(self.map[currentY+1][currentX]);
 
         #check node left
         if(currentX - 1 >= 0):
             if(self.map[currentY][currentX-1].blocked == 0):
-                print "This neighbor is marked as valid:", currentX-1, currentY
+                # print "This neighbor is marked as valid:", currentX-1, currentY
                 validNeighbors.append(self.map[currentY][currentX-1]);
 
         #check node right
         if(currentX + 1 < self.width):
             if(self.map[currentY][currentX+1].blocked == 0):
-                print "This neighbor is marked as valid:", currentX+1, currentY
+                # print "This neighbor is marked as valid:", currentX+1, currentY
                 validNeighbors.append(self.map[currentY][currentX+1]);
 
         return validNeighbors
 
 
 
-'''
-g = GridMap(4, 6)
+
+g = GridMap(6, 10)
 g.map[0][1].blocked = 100
 g.map[1][1].blocked = 100
 g.map[2][1].blocked = 100
@@ -263,10 +251,10 @@ print g.map[5][1].blocked
 g.printScores()
 g.printObstacles()
 g.printCoords()
-g.aStarSearch(0,0,3,3)
+g.aStarSearch(1,1,6,9)
 print "\n\n\n"
 g.printScores()
-'''
+
     # resolution and offset of the map
 
     # create a new instance of the map
@@ -280,4 +268,41 @@ g.printScores()
     # continue making messages
 
     # do not stop publishing
-   
+'''
+if __name__ == '__main__':
+    try:
+        global worldMap
+        global target
+        global openPub
+        #rospy.sleep(5)
+        AMap = 0
+        worldMap = 0
+        path = 0
+
+        rospy.init_node('lab3')
+        gridCells.initGridCell()
+        markerSub = rospy.Subscriber('/move_base_simple/goalrbe', PoseStamped, readGoal)
+        #pathPub = rospy.Publisher('/path_path', Path)
+
+        target = 0
+        start = 0
+        end = 0
+        # print gridCells.mapData
+        rospy.sleep(4)
+        filledMap = gridCells.map1Dto2D(gridCells.height,gridCells.width,gridCells.mapData)
+        rospy.sleep(1)
+        print filledMap, gridCells.height
+        while not rospy.is_shutdown():
+            
+            g = GridMap(gridCells.height, gridCells.width, filledMap)
+            #		g.printScores()
+            #		g.printObstacles()
+            #		g.printCoords()
+            g.aStarSearch(2,2,4,5)
+            #		print "\n\n\n"
+            #		g.printScores()
+            #gridCells.publishGridCells()
+            pass
+    except rospy.ROSInterruptException:
+        pass   
+'''
