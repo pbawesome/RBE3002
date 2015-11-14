@@ -1,4 +1,4 @@
-import lab3
+
 import rospy
 import roslib
 
@@ -16,6 +16,7 @@ mapData = 0
 
 def initGridCell():
     global openPub
+
     worldMapSub = rospy.Subscriber('/map', OccupancyGrid, readWorldMap)
     openPub = rospy.Publisher('/cell_path/open', GridCells, queue_size=10)
 

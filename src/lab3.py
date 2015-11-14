@@ -176,6 +176,7 @@ class GridMap:
                         self.updateGScore(neighbor.point.x, neighbor.point.y, tentativeGScore)
                         self.calculateFScore(neighbor.point.x, neighbor.point.y)
                     elif not (tentativeGScore >= self.map[neighbor.point.y][neighbor.point.x].gScore):
+                        #continue
                         self.map[neighbor.point.y][neighbor.point.x].cameFrom = currentCell
                         self.updateGScore(neighbor.point.x, neighbor.point.y, tentativeGScore)
                         self.calculateFScore(neighbor.point.x, neighbor.point.y)
@@ -241,7 +242,7 @@ class GridMap:
 
 
 
-g = GridMap(6, 10)
+g = GridMap(5,7)
 g.map[0][1].blocked = 100
 g.map[1][1].blocked = 100
 g.map[2][1].blocked = 100
@@ -251,7 +252,7 @@ print g.map[5][1].blocked
 g.printScores()
 g.printObstacles()
 g.printCoords()
-g.aStarSearch(1,1,6,9)
+g.aStarSearch(1,1,4,5)
 print "\n\n\n"
 g.printScores()
 
@@ -291,18 +292,18 @@ if __name__ == '__main__':
         rospy.sleep(4)
         filledMap = gridCells.map1Dto2D(gridCells.height,gridCells.width,gridCells.mapData)
         rospy.sleep(1)
-        print filledMap, gridCells.height
+        #print filledMap, gridCells.height
         while not rospy.is_shutdown():
             
             g = GridMap(gridCells.height, gridCells.width, filledMap)
             #		g.printScores()
             #		g.printObstacles()
             #		g.printCoords()
-            g.aStarSearch(2,2,4,5)
+            #g.aStarSearch(2,2,4,5)
             #		print "\n\n\n"
             #		g.printScores()
             #gridCells.publishGridCells()
-            pass
+            rospy.spin()
     except rospy.ROSInterruptException:
         pass   
 '''
