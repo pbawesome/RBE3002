@@ -18,6 +18,7 @@ thetaInit = 0
 xEnd = 0
 yEnd = 0
 thetaEnd = 0
+totalPath=[]
 
 
 def realWorldMap(data):
@@ -56,52 +57,6 @@ def startCallBack(data):
     xInit = px
     yInit = py
     thetaInit = yaw * 180.0 / math.pi
-	
-	
-'''
-if __name__ == '__main__':
-    try:
-    	global worldMap
-    	global target
-        global cellPub
-
-    	AMap = 0
-    	worldMap = 0
-    	path = 0
-
-    	rospy.init_node('lab3')
-    	worldMapSub = rospy.Subscriber('/map', OccupancyGrid, readWorldMap)
-    	markerSub = rospy.Subscriber('/move_base_simple/goalrbe', PoseStamped, readGoal)
-    	cellPub = rospy.Publisher('/cell_path', GridCells)
-    	pathPub = rospy.Publisher('/path_path', Path)
-
-    	target = 0
-    	start = 0
-    	end = 0
-    	while not rospy.is_shutdown():
-            publishGridCells()
-    except rospy.ROSInterruptException:
-        pass
-'''
-
-def publishGridCells():
-    gridCells = GridCells()
-    gridCells.cell_width = 5
-    gridCells.cell_length = 5
-    
-    global cellPub
-    pointList = []
-    for x in range(5):
-        for y in range(5):
-            p = Point()
-            p.x = x
-            p.y = y
-            p.z = 0
-            pointList.append(p)
-    gridCells.cells = pointList
-    cellPub.publish(gridCells)
-
-
 
 
 #represents instance on the 2D array of GridCells
@@ -144,6 +99,19 @@ class GridMap:
         for y in range(self.height):
             for x in range(self.width):
                 self.map[y][x] = Cell(x,y,-1,-1,-1,0)
+    
+    # def __init__(self, width, height, data2D):
+    #     self.width = width
+    #     self.height = height
+    #     self.openSet = []
+    #     self.closedSet = []
+    #     self.map = []
+    #     #populate the map with cell objects
+    #     self.map = [[Cell(-1,-1,-1,-1,-1, 0) for x in range(width)] for x in range(height)]
+    #     #properly assign coordinates to the cell objects
+    #     for y in range(self.height):
+    #         for x in range(self.width):
+    #             self.map[y][x] = Cell(x,y,-1,-1,-1,data2D[x][y])
 
     #update fScore to a given fScore
     def updateFScore(self, xPos, yPos, score):
@@ -171,9 +139,12 @@ class GridMap:
     def printScores(self):
         for y in range(self.height):
             for x in range(self.width):
-                print("[ %5d %5d %5d]" % (self.map[y][x].fScore, self.map[y][x].gScore, self.map[y][x].hScore)),
+                # print x,("[ %3d %3d %3d]" % (self.map[y][x].fScore, self.map[y][x].gScore, self.map[y][x].hScore)),
+                if (self.map[y][x].fScore != 99999):
+                    print x,("[ %3d %3d %3d]" % (self.map[y][x].fScore, self.map[y][x].gScore, self.map[y][x].hScore)),
                 #print("[",self.map[y][x].fScore, self.map[y][x].gScore, self.map[y][x].hScore, "]",
             print " "
+
 
     #formatted print of obstcles
     def printObstacles(self):
@@ -247,20 +218,15 @@ class GridMap:
                         self.updateGScore(neighbor.point.x, neighbor.point.y, tentativeGScore)
                         self.calculateFScore(neighbor.point.x, neighbor.point.y)
                     #only update if this is a better path to the node
-                    elif not (tentativeGScore >= self.map[neighbor.point.y][neighbor.point.x].gScore):
-                        self.map[neighbor.point.y][neighbor.point.x].cameFrom = currentCell
-                        self.updateGScore(neighbor.point.x, neighbor.point.y, tentativeGScore)
-                        self.calculateFScore(neighbor.point.x, neighbor.point.y)
+                    elif (tentativeGScore >= self.map[neighbor.point.y][neighbor.point.x].gScore):
+                        continue
 
-        return Nothing
-
-
+    
 
     #returns a list of the cells that needed to be visted to reach a goal
     #basically just recurse backwards through the list until you reach the 
     #first cell (which has Nothing in its camefrom field)
     def reconstructPath(self, currentCell):
-        totalPath = []
         totalPath.append(currentCell)
         while(currentCell.cameFrom != None):
             currentCell = currentCell.cameFrom
@@ -323,22 +289,14 @@ class GridMap:
 
         return validNeighbors
 
+def printTotalPath():
+        for x in totalPath:
+            print x.point.x, x.point.y
 
 
 
-g = GridMap(4, 6)
-g.map[0][1].blocked = 100
-g.map[1][1].blocked = 100
-g.map[2][1].blocked = 100
-g.map[3][1].blocked = 100
-g.map[5][1].blocked = 100
-print g.map[5][1].blocked
-g.printScores()
-g.printObstacles()
-g.printCoords()
-g.aStarSearch(0,0,3,3)
-print "\n\n\n"
-g.printScores()
+
+
 
     # resolution and offset of the map
 
@@ -353,4 +311,130 @@ g.printScores()
     # continue making messages
 
     # do not stop publishing
-   
+
+#callback for map data
+def readWorldMap(data):
+# map listener
+    global mapData, grid
+    global width
+    global height
+    global resolution
+    grid = data
+    mapData = data.data
+    width = data.info.width
+    height = data.info.height
+    resolution = data.info.resolution
+
+def initGridCell():
+    global openPub
+    global closedPub
+    worldMapSub = rospy.Subscriber('/map', OccupancyGrid, readWorldMap)
+    openPub = rospy.Publisher('/cell_path/open', GridCells, queue_size=10)
+    closedPub = rospy.Publisher('/cell_path/closed', GridCells, queue_size=10)
+# converts 1 d array of map data into a 2d array using height and width params
+# of the given map
+def map1Dto2D(height,width,data):
+    map2D = [[0 for x in range(width)] for x in range(height)]
+    i = 0
+    for y in range(height):
+        for x in range(width):
+            map2D[x][y] = data[i]
+            i = i + 1
+    return map2D
+
+def createGridCells():
+    global resolution
+    gridCells = GridCells()
+    gridCells.header.frame_id = "/map"
+    gridCells.header.stamp = rospy.Time.now()
+    scale = 1
+    gridCells.cell_width = resolution*scale
+    gridCells.cell_height = resolution*scale
+    xyscale = 1.0/(resolution)
+    pointList = []
+    for x in range(1,width):
+        for y in range(1,height):
+            p = Point()
+            p.x = float(x/xyscale)
+            p.y = float(y/xyscale)
+            p.z = 0
+            pointList.append(p)
+    gridCells.cells = pointList
+    openPub.publish(gridCells)
+
+def publishClosedCells(g):
+    global resolution
+    gridCells = GridCells()
+    gridCells.header.frame_id = "/map"
+    gridCells.header.stamp = rospy.Time.now()
+    scale = 1
+    gridCells.cell_width = resolution*scale
+    gridCells.cell_height = resolution*scale
+    xyscale = 1.0/(resolution)
+    pointList = []
+    for x in range(1,width):
+        for y in range(1,height):
+            if(g.map[x][y].blocked == 100):
+                p = Point(float(x/xyscale),float(y/xyscale))
+                # p.x = float(x/xyscale)
+                # p.y = float(y/xyscale)
+                # p.z = 0
+                pointList.append(p)
+            else:
+                p = Point(x,y)
+                pointList.append(p)
+    gridCells.cells = pointList
+    closedPub.publish(gridCells)
+
+
+
+
+
+if __name__ == '__main__':
+    try:
+        global worldMap
+        global target
+        global cellPub
+
+        AMap = 0
+        worldMap = 0
+        path = 0
+
+        rospy.init_node('lab3')
+        markerSub = rospy.Subscriber('/move_base_simple/goalrbe', PoseStamped, readGoal)
+        pathPub = rospy.Publisher('/path_path', Path)
+
+        initGridCell()
+        rospy.sleep(5)
+
+        g = GridMap(200, 200)
+        g.map[10][10].blocked = 100
+        g.map[11][10].blocked = 100
+        g.map[11][11].blocked = 100
+        g.map[10][11].blocked = 100
+        print g.map[5][1].blocked
+        g.printScores()
+        g.printObstacles()
+        g.printCoords()
+        g.aStarSearch(1,1,15,15)
+        print "\n\n\n"
+        g.printScores()
+        printTotalPath()
+        publishClosedCells(g)
+
+        
+
+        # filledMap = map1Dto2D(height, width, mapData)
+
+        # g = GridMap(height, width, filledMap)
+        # # print filledMap[5][5], g.map[5][5]
+        # g.aStarSearch(1,1,4,4)
+        # print totalPath
+        # g.printScores()
+        # # target = 0
+        # # start = 0
+        # # end = 0
+        # # while not rospy.is_shutdown():
+        # #     publishGridCells()
+    except rospy.ROSInterruptException:
+        pass
