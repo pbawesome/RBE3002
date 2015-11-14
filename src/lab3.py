@@ -11,6 +11,7 @@ from geometry_msgs.msg import Point, Pose, PoseStamped, Twist, PoseWithCovarianc
 import time
 from tf.transformations import euler_from_quaternion
 
+
 xInit = 0
 yInit = 0
 thetaInit = 0
@@ -19,6 +20,7 @@ xEnd = 0
 yEnd = 0
 thetaEnd = 0
 totalPath=[]
+aStarList = []
 
 
 def realWorldMap(data):
@@ -68,15 +70,18 @@ def startCallBack(data):
 #reconstruction
 class Cell:
     def __init__(self,x,y, f, g, h, blocked):
-        self.point = Point(x,y)
+        self.point = MyPoint(x,y)
         self.fScore = f
         self.gScore = g
         self.hScore = h
         self.blocked = blocked
         self.cameFrom = None
 
+    def printCell(self):
+        print self.point.x, self.point.y, self.fScore, self.gScore, self.hScore
+
 #defines an x,y coordinate as an object
-class Point:
+class MyPoint:
     def __init__(self, x, y):
         self.x = x
         self.y = y
@@ -87,20 +92,7 @@ class Point:
 #open set and closed set represent the frontier and
 #expanded nodes, respectively
 class GridMap:
-    def __init__(self, width, height):
-        self.width = width
-        self.height = height
-        self.openSet = []
-        self.closedSet = []
-        self.map = []
-        #populate the map with cell objects
-        self.map = [[Cell(-1,-1,-1,-1,-1, 0) for x in range(width)] for x in range(height)]
-        #properly assign coordinates to the cell objects
-        for y in range(self.height):
-            for x in range(self.width):
-                self.map[y][x] = Cell(x,y,-1,-1,-1,0)
-    
-    # def __init__(self, width, height, data2D):
+    # def __init__(self, width, height):
     #     self.width = width
     #     self.height = height
     #     self.openSet = []
@@ -111,7 +103,20 @@ class GridMap:
     #     #properly assign coordinates to the cell objects
     #     for y in range(self.height):
     #         for x in range(self.width):
-    #             self.map[y][x] = Cell(x,y,-1,-1,-1,data2D[x][y])
+    #             self.map[y][x] = Cell(x,y,-1,-1,-1,0)
+    
+    def __init__(self, width, height, data2D):
+        self.width = width
+        self.height = height
+        self.openSet = []
+        self.closedSet = []
+        self.map = []
+        #populate the map with cell objects
+        self.map = [[Cell(-1,-1,-1,-1,-1, 0) for x in range(width)] for x in range(height)]
+        #properly assign coordinates to the cell objects
+        for y in range(self.height):
+            for x in range(self.width):
+                self.map[y][x] = Cell(x,y,-1,-1,-1,data2D[x][y])
 
     #update fScore to a given fScore
     def updateFScore(self, xPos, yPos, score):
@@ -141,7 +146,7 @@ class GridMap:
             for x in range(self.width):
                 # print x,("[ %3d %3d %3d]" % (self.map[y][x].fScore, self.map[y][x].gScore, self.map[y][x].hScore)),
                 if (self.map[y][x].fScore != 99999):
-                    print x,("[ %3d %3d %3d]" % (self.map[y][x].fScore, self.map[y][x].gScore, self.map[y][x].hScore)),
+                    print ("[ %3d %3d %3d]" % (self.map[y][x].fScore, self.map[y][x].gScore, self.map[y][x].hScore)),
                 #print("[",self.map[y][x].fScore, self.map[y][x].gScore, self.map[y][x].hScore, "]",
             print " "
 
@@ -167,7 +172,7 @@ class GridMap:
         self.closedSet = []
         self.openSet = []
 
-        #need to add the start node to the open set
+        # add the start node to the open set
         self.openSet.append(self.map[startY][startX])
 
         for y in range(self.height):
@@ -176,10 +181,10 @@ class GridMap:
                 self.updateGScore(x,y,99999)
                 self.updateFScore(x,y,99999)
 
-                #calculate the heuristic score for each block
-                #use manhattan distance for now
-                manhat_dist = abs(x-goalX) + abs(y-goalY)
-                self.updateHScore(x,y, manhat_dist)
+                # calculate the heuristic score for each block
+                # use diagonal distance
+                diagonalDistance=sqrt( ((x-goalX)**2) + ((y-goalY)**2) )
+                self.updateHScore(x,y, diagonalDistance)
 
         #set the gScore of start position to 0
         self.updateGScore(startX, startY, 0)
@@ -192,9 +197,20 @@ class GridMap:
             self.openSet.sort(key=lambda x: x.fScore)
             #pop the lowest off the open set and add it to the closed set
             currentCell = self.openSet.pop(0)
+            
+            for o in self.openSet:
+                o.printCell()
 
             print "Currently exploring:", currentCell.point.x, currentCell.point.y
             self.closedSet.append(currentCell)
+
+            # publish currentCell as 'astar' cell to GridCells in Rviz
+            pp=Point()
+            pp.x=currentCell.point.x
+            pp.y=currentCell.point.y
+            pp.z=0
+            aStarList.append(pp)
+            publishGridCellList(aStarList,3)
 
 
             #if currentCell is the goal....
@@ -208,11 +224,12 @@ class GridMap:
             #expand each neighbor
             for neighbor in validNeighbors:
                 #if the neighbor hasn't been expanded yet
-                if(not self.isPointInClosedSet(neighbor)):
-                    #cost to move one square over (cardinal directions)
+                if(not self.isMyPointInClosedSet(neighbor)):
+                    # manhattan distance from start to currentCell
                     tentativeGScore = self.map[currentCell.point.y][currentCell.point.x].gScore + 1
+                    # tentativeGScore = abs(x-goalX) + abs(y-goalY)
                     #add the neighbor to openset and update scores
-                    if(not self.isPointInOpenSet(neighbor)):
+                    if(not self.isMyPointInOpenSet(neighbor)):
                         self.openSet.append(neighbor)
                         self.map[neighbor.point.y][neighbor.point.x].cameFrom = currentCell
                         self.updateGScore(neighbor.point.x, neighbor.point.y, tentativeGScore)
@@ -239,7 +256,7 @@ class GridMap:
     #returns if a given point is in the closed set.
     #breaks immediately if the point is found
     #if nothing found, return false
-    def isPointInClosedSet(self, p):
+    def isMyPointInClosedSet(self, p):
         for cell in self.closedSet:
             if(cell.point.x == p.point.x and cell.point.y == p.point.y):
                 return True
@@ -249,7 +266,7 @@ class GridMap:
     #returns if a given point is in the open set.
     #breaks immediately if the point is found
     #if nothing found, return false
-    def isPointInOpenSet(self, p):
+    def isMyPointInOpenSet(self, p):
         for cell in self.openSet:
             if(cell.point.x == p.point.x and cell.point.y == p.point.y):
                 return True
@@ -290,13 +307,68 @@ class GridMap:
         return validNeighbors
 
 def printTotalPath():
-        for x in totalPath:
-            print x.point.x, x.point.y
+    pathList = []
+    for cell in totalPath:
+        print cell.point.x, cell.point.y
+        p = Point()
+        p.x=cell.point.x
+        p.y=cell.point.y
+        p.z=0
+        pathList.append(p)    
+    publishGridCellList(pathList,2)
+    # PublishGridCellPath(totalPath)
 
+# @typ: 0=open 1=closed 2=path
+def publishGridCellPoint(pnt,typ):
+    global resolution
+    gridCells = GridCells()
+    gridCells.header.frame_id = "/map"
+    gridCells.header.stamp = rospy.Time.now()
+    scale = 1
+    gridCells.cell_width = resolution*scale
+    gridCells.cell_height = resolution*scale
+    xyscale = 1.0/(resolution)
+    p = Point()
+    p.x= float(pnt.x/xyscale)
+    p.y= float(pnt.y/xyscale)
+    gridCells.cells=[p]
+    if(typ==0):
+        openPub.publish(gridCells)
+    if(typ==1):
+        closedPub.publish(gridCells)
+    if(typ==2):
+        pathVizPub.publish(gridCells)
+    if(typ==3):
+        astarVizPub.publish(gridCells)
 
+#publishes a list of Point messages as GridCells
+def publishGridCellList(lst,typ):
+    global resolution
+    gridCells = GridCells()
+    gridCells.header.frame_id = "/map"
+    gridCells.header.stamp = rospy.Time.now()
+    scale = 1
+    gridCells.cell_width = resolution*scale
+    gridCells.cell_height = resolution*scale
+    xyscale = 1.0/(resolution)
+    
+    pntList=[]
+    for pnt in lst:
+        p = Point()
+        p.x= float(pnt.x/xyscale)
+        p.y= float(pnt.y/xyscale)
+        p.z=0
+        pntList.append(p)
 
-
-
+    gridCells.cells=pntList
+    if(typ==0):
+        openPub.publish(gridCells)
+    if(typ==1):
+        closedPub.publish(gridCells)
+    if(typ==2):
+        pathVizPub.publish(gridCells)
+    if(typ==3):
+        astarVizPub.publish(gridCells)
 
     # resolution and offset of the map
 
@@ -328,12 +400,17 @@ def readWorldMap(data):
 def initGridCell():
     global openPub
     global closedPub
+    global pathVizPub
+    global astarVizPub
     worldMapSub = rospy.Subscriber('/map', OccupancyGrid, readWorldMap)
     openPub = rospy.Publisher('/cell_path/open', GridCells, queue_size=10)
     closedPub = rospy.Publisher('/cell_path/closed', GridCells, queue_size=10)
+    pathVizPub = rospy.Publisher('/cell_path/path', GridCells, queue_size=10)
+    astarVizPub = rospy.Publisher('/cell_path/astar', GridCells, queue_size=10)
+
 # converts 1 d array of map data into a 2d array using height and width params
 # of the given map
-def map1Dto2D(height,width,data):
+def map1Dto2D(width,height,data):
     map2D = [[0 for x in range(width)] for x in range(height)]
     i = 0
     for y in range(height):
@@ -342,7 +419,7 @@ def map1Dto2D(height,width,data):
             i = i + 1
     return map2D
 
-def createGridCells():
+def createOpenGrid():
     global resolution
     gridCells = GridCells()
     gridCells.header.frame_id = "/map"
@@ -354,7 +431,7 @@ def createGridCells():
     pointList = []
     for x in range(1,width):
         for y in range(1,height):
-            p = Point()
+            p = MyPoint()
             p.x = float(x/xyscale)
             p.y = float(y/xyscale)
             p.z = 0
@@ -362,6 +439,7 @@ def createGridCells():
     gridCells.cells = pointList
     openPub.publish(gridCells)
 
+# publishes all closed cells in the given GridMap
 def publishClosedCells(g):
     global resolution
     gridCells = GridCells()
@@ -375,13 +453,10 @@ def publishClosedCells(g):
     for x in range(1,width):
         for y in range(1,height):
             if(g.map[x][y].blocked == 100):
-                p = Point(float(x/xyscale),float(y/xyscale))
-                # p.x = float(x/xyscale)
-                # p.y = float(y/xyscale)
-                # p.z = 0
-                pointList.append(p)
-            else:
-                p = Point(x,y)
+                p = Point()#float(x/xyscale),float(y/xyscale))
+                p.x = float(x/xyscale)
+                p.y = float(y/xyscale)
+                p.z = 0
                 pointList.append(p)
     gridCells.cells = pointList
     closedPub.publish(gridCells)
@@ -405,36 +480,15 @@ if __name__ == '__main__':
         pathPub = rospy.Publisher('/path_path', Path)
 
         initGridCell()
-        rospy.sleep(5)
-
-        g = GridMap(200, 200)
-        g.map[10][10].blocked = 100
-        g.map[11][10].blocked = 100
-        g.map[11][11].blocked = 100
-        g.map[10][11].blocked = 100
-        print g.map[5][1].blocked
-        g.printScores()
-        g.printObstacles()
-        g.printCoords()
-        g.aStarSearch(1,1,15,15)
+        # allow subscriber time to callback
+        rospy.sleep(1)
+        
+        filledMap = map1Dto2D(width, height,mapData)
+        g = GridMap(width, height,filledMap)
+        g.aStarSearch(120,14,78,40)
         print "\n\n\n"
         g.printScores()
         printTotalPath()
-        publishClosedCells(g)
 
-        
-
-        # filledMap = map1Dto2D(height, width, mapData)
-
-        # g = GridMap(height, width, filledMap)
-        # # print filledMap[5][5], g.map[5][5]
-        # g.aStarSearch(1,1,4,4)
-        # print totalPath
-        # g.printScores()
-        # # target = 0
-        # # start = 0
-        # # end = 0
-        # # while not rospy.is_shutdown():
-        # #     publishGridCells()
     except rospy.ROSInterruptException:
         pass
