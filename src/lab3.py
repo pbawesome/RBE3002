@@ -22,6 +22,8 @@ thetaEnd = 0
 totalPath=[]
 aStarList = []
 
+scale = 2
+
 
 def realWorldMap(data):
 # map listener
@@ -321,10 +323,10 @@ def printTotalPath():
 # @typ: 0=open 1=closed 2=path
 def publishGridCellPoint(pnt,typ):
     global resolution
+    global scale
     gridCells = GridCells()
     gridCells.header.frame_id = "/map"
     gridCells.header.stamp = rospy.Time.now()
-    scale = 1
     gridCells.cell_width = resolution*scale
     gridCells.cell_height = resolution*scale
     xyscale = 1.0/(resolution)
@@ -344,19 +346,19 @@ def publishGridCellPoint(pnt,typ):
 #publishes a list of Point messages as GridCells
 def publishGridCellList(lst,typ):
     global resolution
+    global scale
     gridCells = GridCells()
     gridCells.header.frame_id = "/map"
     gridCells.header.stamp = rospy.Time.now()
-    scale = 1
     gridCells.cell_width = resolution*scale
     gridCells.cell_height = resolution*scale
-    xyscale = 1.0/(resolution)
+    xyscale = 1.0/(resolution*scale)
     
     pntList=[]
     for pnt in lst:
         p = Point()
-        p.x= float(pnt.x/xyscale)
-        p.y= float(pnt.y/xyscale)
+        p.x= float(pnt.x/xyscale)+1/(2*xyscale)
+        p.y= float(pnt.y/xyscale)+1/(2*xyscale)
         p.z=0
         pntList.append(p)
 
@@ -408,6 +410,18 @@ def initGridCell():
     pathVizPub = rospy.Publisher('/cell_path/path', GridCells, queue_size=10)
     astarVizPub = rospy.Publisher('/cell_path/astar', GridCells, queue_size=10)
 
+# takes in a 2D map and scales it
+def shrinkMap(width, height, mapData2D):
+    newMap = [[0 for x in range(width/scale)] for x in range(height/scale)]
+    for x in range(width/scale):
+        for y in range(height/scale):
+            for j in range(scale):
+                for k in range(scale):
+                    if(mapData2D[x*scale+j][y*scale+k] == 100):
+                        newMap[x][y] = 100
+    return newMap         
+
+
 # converts 1 d array of map data into a 2d array using height and width params
 # of the given map
 def map1Dto2D(width,height,data):
@@ -421,13 +435,13 @@ def map1Dto2D(width,height,data):
 
 def createOpenGrid():
     global resolution
+    global scale
     gridCells = GridCells()
     gridCells.header.frame_id = "/map"
     gridCells.header.stamp = rospy.Time.now()
-    scale = 1
     gridCells.cell_width = resolution*scale
     gridCells.cell_height = resolution*scale
-    xyscale = 1.0/(resolution)
+    xyscale = 1.0/(resolution*scale)
     pointList = []
     for x in range(1,width):
         for y in range(1,height):
@@ -442,13 +456,13 @@ def createOpenGrid():
 # publishes all closed cells in the given GridMap
 def publishClosedCells(g):
     global resolution
+    global scale
     gridCells = GridCells()
     gridCells.header.frame_id = "/map"
     gridCells.header.stamp = rospy.Time.now()
-    scale = 1
     gridCells.cell_width = resolution*scale
     gridCells.cell_height = resolution*scale
-    xyscale = 1.0/(resolution)
+    xyscale = 1.0/(resolution*scale)
     pointList = []
     for x in range(1,width):
         for y in range(1,height):
@@ -456,6 +470,27 @@ def publishClosedCells(g):
                 p = Point()#float(x/xyscale),float(y/xyscale))
                 p.x = float(x/xyscale)
                 p.y = float(y/xyscale)
+                p.z = 0
+                pointList.append(p)
+    gridCells.cells = pointList
+    closedPub.publish(gridCells)
+
+def publishClosedCellsShrink(map2D):
+    global resolution
+    global scale
+    gridCells = GridCells()
+    gridCells.header.frame_id = "/map"
+    gridCells.header.stamp = rospy.Time.now()
+    gridCells.cell_width = resolution*scale
+    gridCells.cell_height = resolution*scale
+    xyscale = 1.0/(resolution*scale)
+    pointList = []
+    for x in range(width/scale):
+        for y in range(height/scale):
+            if(map2D[x][y] == 100):
+                p = Point()#float(x/xyscale),float(y/xyscale))
+                p.x = float(x/xyscale)+1/(2*xyscale)
+                p.y = float(y/xyscale)+1/(2*xyscale)
                 p.z = 0
                 pointList.append(p)
     gridCells.cells = pointList
@@ -470,11 +505,13 @@ if __name__ == '__main__':
         global worldMap
         global target
         global cellPub
+        global scale
+        global resolution
 
         AMap = 0
         worldMap = 0
         path = 0
-
+        scale = 4
         rospy.init_node('lab3')
         markerSub = rospy.Subscriber('/move_base_simple/goalrbe', PoseStamped, readGoal)
         pathPub = rospy.Publisher('/path_path', Path)
@@ -482,13 +519,15 @@ if __name__ == '__main__':
         initGridCell()
         # allow subscriber time to callback
         rospy.sleep(1)
-        
         filledMap = map1Dto2D(width, height,mapData)
-        g = GridMap(width, height,filledMap)
-        g.aStarSearch(120,14,78,40)
+        shrinkedMap = shrinkMap(width,height,filledMap)
+        publishClosedCellsShrink(shrinkedMap)
+        g = GridMap(width/scale, height/scale,shrinkedMap)
+        ratio = (resolution*scale)
+        g.aStarSearch(12/scale,12/scale,120/scale,120/scale)
         print "\n\n\n"
-        g.printScores()
-        printTotalPath()
+        #g.printScores()
+        #printTotalPath()
 
     except rospy.ROSInterruptException:
         pass
