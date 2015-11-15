@@ -105,11 +105,30 @@ def printTotalPath():
         p.z=0
         pathList.append(p)    
     publishGridCellList(pathList,2)
-    for pnt in pathList:
-        navToPosePoint(float(pnt.x/xyscale)+1/(2*xyscale),float(pnt.y/xyscale)+1/(2*xyscale))
+    #for pnt in pathList:
+    #    navToPosePoint(float(pnt.x/xyscale)+1/(2*xyscale),float(pnt.y/xyscale)+1/(2*xyscale))
     #wayPoints(totalPath)
     # PublishGridCellPath(totalPath)
-    return pathList
+    #return pathList
+    publishTotalPathMsg(totalPath)
+
+def publishTotalPathMsg(pntPath):
+    global resolution
+    global scale
+    global pathPub
+    pth = Path()
+    pth.header.frame_id = "/map"
+    pth.header.stamp = rospy.Time.now()
+    poseList = []
+    xyscale = 1.0/(resolution*scale)
+    for pnt in pntPath:  # list of cells?
+        p = PoseStamped()
+        p.pose.position.x = float(pnt.point.x/xyscale)+1/(2*xyscale)
+        p.pose.position.y = float(pnt.point.y/xyscale)+1/(2*xyscale)
+        p.pose.position.z = 0
+        poseList.append(p)
+    pth.poses = poseList
+    pathPub.publish(pth)
 
 
 #represents instance on the 2D array of GridCells
@@ -639,7 +658,7 @@ def rotate(angle):
     init_angle = theta
     #print "%f" % (init_angle)
     desired_angle = init_angle + angle
-    p = 0.025
+    p = 0.015
     error = 0
     errorband = 2 
     print "Start turn"
@@ -648,18 +667,19 @@ def rotate(angle):
             desired_angle = desired_angle - 360
         else:
             desired_angle = desired_angle + 360
-    if(angle < 0):
-        while(theta > desired_angle + errorband) or (theta < desired_angle - errorband):
-            error = abs(theta-desired_angle)
-            publishTwist(0,-error*p)
-            #print "%f" %(xPos) + ", %f" %(yPos) + ", %f" %(theta)
-            time.sleep(0.10) 
-    else:
-        while(theta > desired_angle + errorband) or (theta < desired_angle - errorband):
-            error = abs(theta-desired_angle)
-            publishTwist(0,error*p)
-            #print "%f" %(xPos) + ", %f" %(yPos) + ", %f" %(theta)
-            time.sleep(0.10)
+    #if(angle < 0):
+    while(theta > desired_angle + errorband) or (theta < desired_angle - errorband):
+        error = theta-desired_angle
+        publishTwist(0,-error*p)
+        #publishTwist(0,-error*p)
+        #print "%f" %(xPos) + ", %f" %(yPos) + ", %f" %(theta)
+        time.sleep(0.05) 
+    # else:
+    #     while(theta > desired_angle + errorband) or (theta < desired_angle - errorband):
+    #         error = abs(theta-desired_angle)
+    #         publishTwist(0,error*p)
+    #         #print "%f" %(xPos) + ", %f" %(yPos) + ", %f" %(theta)
+    #         time.sleep(0.10)
     print "Done turn"
     publishTwist(0, 0)
 
