@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import lab2
+
 import rospy
 import roslib
 import time
@@ -90,6 +90,26 @@ def startCallBack(data):
     xInit = px
     yInit = py
     thetaInit = yaw * 180.0 / math.pi
+
+def printTotalPath():
+    global resolution
+    global scale
+    fscale = float(scale)
+    xyscale = 1/(resolution*scale)
+    pathList = []
+    for cell in totalPath:
+        print cell.point.x, cell.point.y
+        p = Point()
+        p.x=cell.point.x
+        p.y=cell.point.y
+        p.z=0
+        pathList.append(p)    
+    publishGridCellList(pathList,2)
+    for pnt in pathList:
+        navToPosePoint(float(pnt.x/xyscale)+1/(2*xyscale),float(pnt.y/xyscale)+1/(2*xyscale))
+    #wayPoints(totalPath)
+    # PublishGridCellPath(totalPath)
+    return pathList
 
 
 #represents instance on the 2D array of GridCells
@@ -268,8 +288,7 @@ class GridMap:
                     #only update if this is a better path to the node
                     elif (tentativeGScore >= self.map[neighbor.point.y][neighbor.point.x].gScore):
                         continue
-
-    
+        #printTotalPath()
 
     #returns a list of the cells that needed to be visted to reach a goal
     #basically just recurse backwards through the list until you reach the 
@@ -362,25 +381,6 @@ def wayPoints(path):
     publishGridCellList(pathList,0)
     print wayPoints
     return wayPoints
-
-def printTotalPath():
-    global resolution
-    global scale
-    fscale = float(scale)
-    xyscale = 1/(resolution*scale)
-    pathList = []
-    for cell in totalPath:
-        print cell.point.x, cell.point.y
-        p = Point()
-        p.x=cell.point.x
-        p.y=cell.point.y
-        p.z=0
-        pathList.append(p)    
-    publishGridCellList(pathList,2)
-    for pnt in pathList:
-        navToPosePoint(float(pnt.x/xyscale)+1/(2*xyscale),float(pnt.y/xyscale)+1/(2*xyscale))
-    #wayPoints(totalPath)
-    # PublishGridCellPath(totalPath)
 
 
 # @typ: 0=open 1=closed 2=path
@@ -569,11 +569,11 @@ def navToPosePoint(goal_x,goal_y):
     global xPos
     global yPos
     global theta
-    print "goals x %f" %(goal_x) + "goals y %f" %(goal_y) + "theta %f" %(theta)
+    #print "goals x %f" %(goal_x) + "goals y %f" %(goal_y) + "theta %f" %(theta)
     init_dist_x = xPos
     init_dist_y = yPos
     init_theta = theta
-    print "init x %f" %(init_dist_x) + "init y %f" %(init_dist_y) + "init theta %f" %(init_theta)
+    #print "init x %f" %(init_dist_x) + "init y %f" %(init_dist_y) + "init theta %f" %(init_theta)
     rel_x = goal_x-init_dist_x
     rel_y = goal_y-init_dist_y
     goal_theta = math.atan2(rel_y,rel_x) * (180/3.14)
@@ -639,6 +639,8 @@ def rotate(angle):
     init_angle = theta
     #print "%f" % (init_angle)
     desired_angle = init_angle + angle
+    p = 0.025
+    error = 0
     errorband = 2 
     print "Start turn"
     if(desired_angle < -180) or (desired_angle >= 180):
@@ -648,24 +650,29 @@ def rotate(angle):
             desired_angle = desired_angle + 360
     if(angle < 0):
         while(theta > desired_angle + errorband) or (theta < desired_angle - errorband):
-            error = abs(theta-desiredangle) #implement later
-            publishTwist(0,-0.25)
+            error = abs(theta-desired_angle)
+            publishTwist(0,-error*p)
             #print "%f" %(xPos) + ", %f" %(yPos) + ", %f" %(theta)
             time.sleep(0.10) 
     else:
         while(theta > desired_angle + errorband) or (theta < desired_angle - errorband):
-            error = abs(theta-desiredangle)
-            publishTwist(0,0.25)
+            error = abs(theta-desired_angle)
+            publishTwist(0,error*p)
             #print "%f" %(xPos) + ", %f" %(yPos) + ", %f" %(theta)
             time.sleep(0.10)
     print "Done turn"
     publishTwist(0, 0)
 
 
+# def a_star_server():
+#     s = rospy.Service('a_star_server', astar, g.aStarSearch)
+#     print "a* ready."
+#     rospy.spin()
 
 
 if __name__ == '__main__':
-    rospy.init_node('lab3', anonymous=True)
+    #rospy.init_node('a_star_server')
+    rospy.init_node('lab3')
     try:
         global worldMap
         global target
@@ -683,7 +690,6 @@ if __name__ == '__main__':
         worldMap = 0
         path = 0
         scale = 8
-        # rospy.init_node('lab3')
         sub = rospy.Subscriber('/odom', Odometry, odomCallback)
         pub = rospy.Publisher('/cmd_vel_mux/input/teleop', Twist, queue_size = 5)
         markerSub = rospy.Subscriber('/move_base_simple/goalrbe', PoseStamped, readGoal)
@@ -697,9 +703,10 @@ if __name__ == '__main__':
         shrinkedMap = shrinkMap(width,height,filledMap)
         publishClosedCellsShrink(shrinkedMap)
         ratio = 1.0/(resolution)
-        while ((yEnd == 0) or (xEnd == 0)):
+        while (yEnd == 0 or xEnd == 0):
             print "waiting for start and goal" 
         g = GridMap(width/scale, height/scale,shrinkedMap)
+        #a_star_server()
         #ratio = (resolution*scale)
         g.aStarSearch(int(xPos*ratio/scale),int(yPos*ratio/scale),int(xEnd*ratio/scale),int(yEnd*ratio/scale))
         #print "\n\n\n"
