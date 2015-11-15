@@ -1,9 +1,12 @@
 #!/usr/bin/env python
-
+import lab2
 import rospy
 import roslib
 import time
 import math
+import tf
+
+from tf.transformations import euler_from_quaternion
 from numpy import *
 from nav_msgs.msg import OccupancyGrid, GridCells, Path, Odometry
 from geometry_msgs.msg import Point, Pose, PoseStamped, Twist, PoseWithCovarianceStamped, Quaternion
@@ -11,6 +14,8 @@ from geometry_msgs.msg import Point, Pose, PoseStamped, Twist, PoseWithCovarianc
 import time
 from tf.transformations import euler_from_quaternion
 
+from std_msgs.msg import Empty
+from kobuki_msgs.msg import BumperEvent
 
 xInit = 0
 yInit = 0
@@ -23,6 +28,16 @@ totalPath=[]
 aStarList = []
 
 scale = 2
+
+#Kobuki Dimensions
+wheel_rad  = 3.5  #cm
+wheel_base = 23.0 #cm
+
+#Odometry Data Variables
+xPos = 2;
+yPos = 2;
+theta = 0;
+
 
 
 def realWorldMap(data):
@@ -47,6 +62,20 @@ def readGoal(msg):
     xEnd = px
     yEnd = py
     thetaEnd = yaw * 180.0 / math.pi
+
+def readInitPose(initpose):
+    px = initpose.pose.pose.position.x
+    py = initpose.pose.pose.position.y
+    quat = initpose.pose.pose.orientation
+    q = [quat.x, quat.y, quat.z, quat.w]
+    roll, pitch, yaw = euler_from_quaternion(q)
+    global xInit
+    global yInit
+    global thetaInit
+    xInit = px
+    yInit = py
+    thetaInit = yaw * 180.0 / math.pi
+    print xInit,xInit,thetaInit
 
 	
 def startCallBack(data):
@@ -228,7 +257,7 @@ class GridMap:
                 #if the neighbor hasn't been expanded yet
                 if(not self.isMyPointInClosedSet(neighbor)):
                     # manhattan distance from start to currentCell
-                    tentativeGScore = self.map[currentCell.point.y][currentCell.point.x].gScore + 1
+                    tentativeGScore = self.map[currentCell.point.y][currentCell.point.x].gScore + 0.5
                     # tentativeGScore = abs(x-goalX) + abs(y-goalY)
                     #add the neighbor to openset and update scores
                     if(not self.isMyPointInOpenSet(neighbor)):
@@ -308,7 +337,37 @@ class GridMap:
 
         return validNeighbors
 
+def wayPoints(path):
+    wayPoints = []
+    previousX = 0
+    previousY = 0
+    following = True
+    for cell in path:
+        if(following):
+            if((cell.point.x == previousX) and (cell.point.y != previousY)):
+                wayPoints.append(cell)
+                following != following
+        else:
+            if((cell.point.y == previousY) and (cell.point.x != previousX)):
+                wayPoints.append(cell)
+                following != following
+    pathList = []
+    for cell in wayPoints:
+        print cell.point.x, cell.point.y
+        p = Point()
+        p.x=cell.point.x
+        p.y=cell.point.y
+        p.z=0
+        pathList.append(p)    
+    publishGridCellList(pathList,0)
+    print wayPoints
+    return wayPoints
+
 def printTotalPath():
+    global resolution
+    global scale
+    fscale = float(scale)
+    xyscale = 1/(resolution*scale)
     pathList = []
     for cell in totalPath:
         print cell.point.x, cell.point.y
@@ -318,7 +377,11 @@ def printTotalPath():
         p.z=0
         pathList.append(p)    
     publishGridCellList(pathList,2)
+    for pnt in pathList:
+        navToPosePoint(float(pnt.x/xyscale)+1/(2*xyscale),float(pnt.y/xyscale)+1/(2*xyscale))
+    #wayPoints(totalPath)
     # PublishGridCellPath(totalPath)
+
 
 # @typ: 0=open 1=closed 2=path
 def publishGridCellPoint(pnt,typ):
@@ -496,25 +559,136 @@ def publishClosedCellsShrink(map2D):
     gridCells.cells = pointList
     closedPub.publish(gridCells)
 
+#def nav():
+    #sub = rospy.Subscriber('/move_base_simple/goalrbe', PoseStamped, navToPose)
+    #initposeSub = rospy.Subscriber('/initialpose', PoseWithCovarianceStamped, readInitPose)
+
+#publishTwist: publishes the Twist message to the cmd_vel_mux/input/teleop topic using the given linear(u) and angular(w) velocity
+
+def navToPosePoint(goal_x,goal_y):
+    global xPos
+    global yPos
+    global theta
+    print "goals x %f" %(goal_x) + "goals y %f" %(goal_y) + "theta %f" %(theta)
+    init_dist_x = xPos
+    init_dist_y = yPos
+    init_theta = theta
+    print "init x %f" %(init_dist_x) + "init y %f" %(init_dist_y) + "init theta %f" %(init_theta)
+    rel_x = goal_x-init_dist_x
+    rel_y = goal_y-init_dist_y
+    goal_theta = math.atan2(rel_y,rel_x) * (180/3.14)
+    #print "goal theta %f" %(goal_theta)
+    distance = math.sqrt(pow(goal_x-init_dist_x,2) + pow(goal_y-init_dist_y,2))
+    #print "spin!"
+    rotate(goal_theta-init_theta)
+    driveStraight(0.2, distance)
+
+def publishTwist(u,w):
+    global pub
+    twist = Twist()
+    twist.linear.x = u; twist.linear.y = 0; twist.linear.z = 0
+    twist.angular.x = 0; twist.angular.y = 0; twist.angular.z = w
+    pub.publish(twist)
+
+def odomCallback(data):
+    global pose
+    #pose = Pose()
+    odom_list.waitForTransform('map', 'base_footprint', rospy.Time(0), rospy.Duration(1.0))
+    (position, orientation) = odom_list.lookupTransform('map','base_footprint', rospy.Time(0))
+    x=position[0]
+    y=position[1]
+    w = orientation
+    q = [w[0], w[1], w[2], w[3]]
+    roll, pitch, yaw = euler_from_quaternion(q)
+    #convert yaw to degrees
+    global xPos
+    global yPos
+    global theta
+    xPos = x
+    yPos = y
+    theta = math.degrees(yaw)
+    #print xPos,yPos,theta
+
+#driveStraight: drives thr robot forward at a desired speed for a certain amount of time
+def driveStraight(maxspeed, distance):
+    u = maxspeed;
+    w = 0;
+    minspeed = 0.05
+    init_dist_x = xPos
+    init_dist_y = yPos
+    d_traveled = 0
+    d_seg1 = 0.2 * distance
+    d_seg2 = 0.8 * distance 
+
+    while((d_traveled  < distance) and not rospy.is_shutdown()):
+        #determine the distance and if you have gone far enough
+        d_traveled = math.sqrt(pow(xPos-init_dist_x,2) + pow(yPos-init_dist_y,2))
+        if (d_traveled < d_seg1):
+            vel = (d_traveled/d_seg1)*maxspeed + minspeed
+        elif (d_traveled < d_seg2):
+            vel = maxspeed
+        else:
+            vel = ((distance - d_traveled)/(distance - d_seg2))*maxspeed + minspeed
+        publishTwist(vel, 0)
+        time.sleep(0.15)
+    publishTwist(0, 0)
+
+#rotate: rotates the robot around its center by a certain angle (in degrees)
+#known to be buggy 
+def rotate(angle):
+    init_angle = theta
+    #print "%f" % (init_angle)
+    desired_angle = init_angle + angle
+    errorband = 2 
+    print "Start turn"
+    if(desired_angle < -180) or (desired_angle >= 180):
+        if(angle > 0):
+            desired_angle = desired_angle - 360
+        else:
+            desired_angle = desired_angle + 360
+    if(angle < 0):
+        while(theta > desired_angle + errorband) or (theta < desired_angle - errorband):
+            error = abs(theta-desiredangle) #implement later
+            publishTwist(0,-0.25)
+            #print "%f" %(xPos) + ", %f" %(yPos) + ", %f" %(theta)
+            time.sleep(0.10) 
+    else:
+        while(theta > desired_angle + errorband) or (theta < desired_angle - errorband):
+            error = abs(theta-desiredangle)
+            publishTwist(0,0.25)
+            #print "%f" %(xPos) + ", %f" %(yPos) + ", %f" %(theta)
+            time.sleep(0.10)
+    print "Done turn"
+    publishTwist(0, 0)
 
 
 
 
 if __name__ == '__main__':
+    rospy.init_node('lab3', anonymous=True)
     try:
         global worldMap
         global target
         global cellPub
         global scale
         global resolution
+        global xInit, yInit, xEnd, yEnd
+        global pose
+        global odom_tf
+        global odom_list
+
+        odom_list = tf.TransformListener()
 
         AMap = 0
         worldMap = 0
         path = 0
-        scale = 4
-        rospy.init_node('lab3')
+        scale = 8
+        # rospy.init_node('lab3')
+        sub = rospy.Subscriber('/odom', Odometry, odomCallback)
+        pub = rospy.Publisher('/cmd_vel_mux/input/teleop', Twist, queue_size = 5)
         markerSub = rospy.Subscriber('/move_base_simple/goalrbe', PoseStamped, readGoal)
         pathPub = rospy.Publisher('/path_path', Path)
+        initposeSub = rospy.Subscriber('/initialpose', PoseWithCovarianceStamped, readInitPose)
 
         initGridCell()
         # allow subscriber time to callback
@@ -522,12 +696,14 @@ if __name__ == '__main__':
         filledMap = map1Dto2D(width, height,mapData)
         shrinkedMap = shrinkMap(width,height,filledMap)
         publishClosedCellsShrink(shrinkedMap)
+        ratio = 1.0/(resolution)
+        while ((yEnd == 0) or (xEnd == 0)):
+            print "waiting for start and goal" 
         g = GridMap(width/scale, height/scale,shrinkedMap)
-        ratio = (resolution*scale)
-        g.aStarSearch(12/scale,12/scale,120/scale,120/scale)
-        print "\n\n\n"
+        #ratio = (resolution*scale)
+        g.aStarSearch(int(xPos*ratio/scale),int(yPos*ratio/scale),int(xEnd*ratio/scale),int(yEnd*ratio/scale))
+        #print "\n\n\n"
         #g.printScores()
-        #printTotalPath()
-
+        printTotalPath()
     except rospy.ROSInterruptException:
         pass
