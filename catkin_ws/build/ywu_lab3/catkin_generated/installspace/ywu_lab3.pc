@@ -1,0 +1,8 @@
+prefix=/home/rbe/catkin_ws/install
+
+Name: ywu_lab3
+Description: Description of ywu_lab3
+Version: 0.0.0
+Cflags: -I/home/rbe/catkin_ws/install/include
+Libs: -L/home/rbe/catkin_ws/install/lib -lywu_lab3
+Requires: nav_msgs roscpp rospy std_msgs

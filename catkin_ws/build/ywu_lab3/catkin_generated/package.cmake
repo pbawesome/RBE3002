@@ -1,0 +1,7 @@
+set(_CATKIN_CURRENT_PACKAGE "ywu_lab3")
+set(ywu_lab3_MAINTAINER "rbe <rbe@todo.todo>")
+set(ywu_lab3_DEPRECATED "")
+set(ywu_lab3_VERSION "0.0.0")
+set(ywu_lab3_BUILD_DEPENDS "message_generation" "nav_msgs" "roscpp" "rospy" "std_msgs")
+set(ywu_lab3_RUN_DEPENDS "message_runtime" "nav_msgs" "roscpp" "rospy" "std_msgs")
+set(ywu_lab3_BUILDTOOL_DEPENDS "catkin")
