@@ -1,0 +1,6 @@
+The A star algorithm implemented was based on the pseduocode given by the wikipedia page
+on A*: https://en.wikipedia.org/wiki/A*_search_algorithm
+
+For creating a service, the ros tutorial for services was used: http://wiki.ros.org/Services
+
+For allowing the robot to navigate the maze, code from last weeks lab was reused (lab2).
