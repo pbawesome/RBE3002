@@ -18,6 +18,7 @@ from tf.transformations import euler_from_quaternion
 from std_msgs.msg import Empty
 from kobuki_msgs.msg import BumperEvent
 
+#init globals
 xInit = 0
 yInit = 0
 thetaInit = 0
@@ -40,7 +41,7 @@ yPos = 2;
 theta = 0;
 
 
-
+#map callback
 def realWorldMap(data):
 # map listener
     global mapData, grid
@@ -51,6 +52,7 @@ def realWorldMap(data):
     width = data.info.width
     height = data.info.height
 
+#goal pose message callback
 def readGoal(msg):
     px = msg.pose.position.x
     py = msg.pose.position.y
@@ -64,6 +66,7 @@ def readGoal(msg):
     yEnd = py
     thetaEnd = yaw * 180.0 / math.pi
 
+#init pose message callback
 def readInitPose(initpose):
     px = initpose.pose.pose.position.x
     py = initpose.pose.pose.position.y
@@ -78,7 +81,7 @@ def readInitPose(initpose):
     thetaInit = yaw * 180.0 / math.pi
     print xInit,xInit,thetaInit
 
-	
+#callback for odom data @ start	
 def startCallBack(data):
     px = data.pose.pose.position.x
     py = data.pose.pose.position.y
@@ -92,19 +95,24 @@ def startCallBack(data):
     yInit = py
     thetaInit = yaw * 180.0 / math.pi
 
+#prints the total path to the terminal
 def printTotalPath():
     global resolution
     global scale
+    #adjust for scaling
     fscale = float(scale)
     xyscale = 1/(resolution*scale)
     pathList = []
+    #print each cell that occurs in the final path
     for cell in totalPath:
         print cell.point.x, cell.point.y
         p = Point()
+        #need to put these in a new list for path msg
         p.x=cell.point.x
         p.y=cell.point.y
         p.z=0
         pathList.append(p)    
+    #send the new path msg
     publishGridCellList(pathList,2)
     pth = publishTotalPathMsg(totalPath)
     #for pnt in pathList:
@@ -114,23 +122,29 @@ def printTotalPath():
     #return pathList
     return pth
 
+#converts a set of points into a set of poses to be published
 def publishTotalPathMsg(pntPath):
     global resolution
     global scale
     global pathPub
+    #new path message
     pth = Path()
     pth.header.frame_id = "/map"
+    #time stamp
     pth.header.stamp = rospy.Time.now()
     poseList = []
+    #scale adjustment
     xyscale = 1.0/(resolution*scale)
     for pnt in pntPath:  # list of cells?
         p = PoseStamped()
+        #create a poseStamped message for each point in the collection
         # p.header.frame_id = "/map"
         # p.header.stamp = rospy.Time.now()
         p.pose.position.x = float(pnt.point.x/xyscale)+1/(2*xyscale)
         p.pose.position.y = float(pnt.point.y/xyscale)+1/(2*xyscale)
         p.pose.position.z = 0
         poseList.append(p)
+    #pushlish me
     pth.poses = poseList
     pathPub.publish(pth)
     return pth
@@ -181,6 +195,7 @@ class GridMap:
     #             self.map[y][x] = Cell(x,y,-1,-1,-1,0)
     
     def __init__(self, width, height, data2D):
+    	#init variables from constructor
         self.width = width
         self.height = height
         self.openSet = []
@@ -192,6 +207,7 @@ class GridMap:
         for y in range(self.height):
             for x in range(self.width):
                 self.map[y][x] = Cell(x,y,-1,-1,-1,data2D[x][y])
+        #service to actually run A*
         self.performAstar = rospy.Service('/a_star_server', aStar, self.aStarSearch)
 
     #update fScore to a given fScore
@@ -221,6 +237,7 @@ class GridMap:
         for y in range(self.height):
             for x in range(self.width):
                 # print x,("[ %3d %3d %3d]" % (self.map[y][x].fScore, self.map[y][x].gScore, self.map[y][x].hScore)),
+                #print the f score if the node has actually been visited (non-visted will not be printed)
                 if (self.map[y][x].fScore != 99999):
                     print ("[ %3d %3d %3d]" % (self.map[y][x].fScore, self.map[y][x].gScore, self.map[y][x].hScore)),
                 #print("[",self.map[y][x].fScore, self.map[y][x].gScore, self.map[y][x].hScore, "]",
@@ -243,19 +260,23 @@ class GridMap:
 
     #AStar search for a path from a start XY to a goal XY
     #returns a list of grid cells on successful completion
+    #req is the service request
     def aStarSearch(self, req):
         global totalPath
         #initialize open and closed sets to 0
         self.closedSet = []
         self.openSet = []
+        #get the start and end from req
         startX = req.x0
         startY = req.y0
         goalX = req.x1
         goalY = req.y1
+        #debug print
         print "x0 %f" %startX + "x1 %f" %startY+"y0 %f" %goalX + "y1 %f" %goalY
         # add the start node to the open set
         self.openSet.append(self.map[startY][startX])
 
+	#initialize f and g scores to inifinity (AKA 99999)
         for y in range(self.height):
             for x in range(self.width):
                 #initialize fScores and gScores to 'infinity'
@@ -263,7 +284,7 @@ class GridMap:
                 self.updateFScore(x,y,99999)
 
                 # calculate the heuristic score for each block
-                # use diagonal distance
+                # use diagonal distance (Euclidean)
                 diagonalDistance=sqrt( ((x-goalX)**2) + ((y-goalY)**2) )
                 self.updateHScore(x,y, diagonalDistance)
 
@@ -279,6 +300,7 @@ class GridMap:
             #pop the lowest off the open set and add it to the closed set
             currentCell = self.openSet.pop(0)
             
+            #print the frontier
             for o in self.openSet:
                 o.printCell()
 
@@ -296,6 +318,7 @@ class GridMap:
 
             #if currentCell is the goal....
             if(currentCell.point.x == goalX and currentCell.point.y == goalY):
+            	#reconstruct the path and add the path to RViz
                 self.reconstructPath(currentCell)
                 ret = aStarResponse()
                 ret.path = printTotalPath()
@@ -304,6 +327,7 @@ class GridMap:
                 return ret
 
             #check neighbors
+            #neighbor is valid if it is in the world map grid and is a free space (blocked == 0)
             validNeighbors = self.getValidNeighbors(currentCell.point.x, currentCell.point.y)
 
             #expand each neighbor
@@ -389,34 +413,9 @@ class GridMap:
 
         return validNeighbors
 
-def wayPoints(path):
-    wayPoints = []
-    previousX = 0
-    previousY = 0
-    following = True
-    for cell in path:
-        if(following):
-            if((cell.point.x == previousX) and (cell.point.y != previousY)):
-                wayPoints.append(cell)
-                following != following
-        else:
-            if((cell.point.y == previousY) and (cell.point.x != previousX)):
-                wayPoints.append(cell)
-                following != following
-    pathList = []
-    for cell in wayPoints:
-        print cell.point.x, cell.point.y
-        p = Point()
-        p.x=cell.point.x
-        p.y=cell.point.y
-        p.z=0
-        pathList.append(p)    
-    publishGridCellList(pathList,0)
-    print wayPoints
-    return wayPoints
-
 
 # @typ: 0=open 1=closed 2=path
+#publish a single grid cell at the specified point
 def publishGridCellPoint(pnt,typ):
     global resolution
     global scale
@@ -430,6 +429,7 @@ def publishGridCellPoint(pnt,typ):
     p.x= float(pnt.x/xyscale)
     p.y= float(pnt.y/xyscale)
     gridCells.cells=[p]
+    #publish based on type
     if(typ==0):
         openPub.publish(gridCells)
     if(typ==1):
@@ -450,6 +450,7 @@ def publishGridCellList(lst,typ):
     gridCells.cell_height = resolution*scale
     xyscale = 1.0/(resolution*scale)
     
+    #populate the point list
     pntList=[]
     for pnt in lst:
         p = Point()
@@ -458,6 +459,7 @@ def publishGridCellList(lst,typ):
         p.z=0
         pntList.append(p)
 
+    #publish the correct type of point
     gridCells.cells=pntList
     if(typ==0):
         openPub.publish(gridCells)
@@ -495,6 +497,7 @@ def readWorldMap(data):
     height = data.info.height
     resolution = data.info.resolution
 
+#open all the necessary publishers and subscribers for grid cells
 def initGridCell():
     global openPub
     global closedPub
@@ -509,6 +512,8 @@ def initGridCell():
 # takes in a 2D map and scales it
 def shrinkMap(width, height, mapData2D):
     newMap = [[0 for x in range(width/scale)] for x in range(height/scale)]
+    #loops for days
+    #properly adjust scaling factors for the map
     for x in range(width/scale):
         for y in range(height/scale):
             for j in range(scale):
@@ -529,6 +534,8 @@ def map1Dto2D(width,height,data):
             i = i + 1
     return map2D
 
+#similar to other grid cell functions
+#make a grid
 def createOpenGrid():
     global resolution
     global scale
@@ -598,6 +605,8 @@ def publishClosedCellsShrink(map2D):
 
 #publishTwist: publishes the Twist message to the cmd_vel_mux/input/teleop topic using the given linear(u) and angular(w) velocity
 
+#move to a given point based on the robots current position
+#based on function from lab2
 def navToPosePoint(goal_x,goal_y):
     global xPos
     global yPos
@@ -616,6 +625,7 @@ def navToPosePoint(goal_x,goal_y):
     rotate(goal_theta-init_theta)
     driveStraight(0.2, distance)
 
+#send a twist message with given params
 def publishTwist(u,w):
     global pub
     twist = Twist()
@@ -623,6 +633,7 @@ def publishTwist(u,w):
     twist.angular.x = 0; twist.angular.y = 0; twist.angular.z = w
     pub.publish(twist)
 
+#odometry callback imported from lab2
 def odomCallback(data):
     global pose
     #pose = Pose()
@@ -642,6 +653,7 @@ def odomCallback(data):
     theta = math.degrees(yaw)
     #print xPos,yPos,theta
 
+#imported from lab2
 #driveStraight: drives thr robot forward at a desired speed for a certain amount of time
 def driveStraight(maxspeed, distance):
     u = maxspeed;
@@ -666,6 +678,7 @@ def driveStraight(maxspeed, distance):
         time.sleep(0.15)
     publishTwist(0, 0)
 
+#imported from lab2
 #rotate: rotates the robot around its center by a certain angle (in degrees)
 #known to be buggy 
 def rotate(angle):
@@ -686,10 +699,11 @@ def rotate(angle):
     publishTwist(0, 0)
 
 
-
+#main execution
 if __name__ == '__main__':
     rospy.init_node('a_star_server')
     try:
+    	#init the globals
         global worldMap
         global target
         global cellPub
@@ -700,27 +714,35 @@ if __name__ == '__main__':
         global odom_tf
         global odom_list
 
+	#get odometry setup
         odom_list = tf.TransformListener()
-
+	#variable initializations
         AMap = 0
         worldMap = 0
         path = 0
         scale = 8
+        #setup publishers/subs
         sub = rospy.Subscriber('/odom', Odometry, odomCallback)
         pub = rospy.Publisher('/cmd_vel_mux/input/teleop', Twist, queue_size = 5)
         markerSub = rospy.Subscriber('/move_base_simple/goalrbe', PoseStamped, readGoal)
         pathPub = rospy.Publisher('/path_path', Path)
         initposeSub = rospy.Subscriber('/initialpose', PoseWithCovarianceStamped, readInitPose)
-
+	
+	#more pubs/subs
         initGridCell()
         # allow subscriber time to callback
         rospy.sleep(1)
+        #get the map data from the map message
         filledMap = map1Dto2D(width, height,mapData)
+        #shrink the map to a desired size/scale
         shrinkedMap = shrinkMap(width,height,filledMap)
+        #publish the obstacles map to rviz
         publishClosedCellsShrink(shrinkedMap)
         ratio = 1.0/(resolution)
         #while (yEnd == 0 or xEnd == 0):
-        #    print "waiting for start and goal" 
+        #    print "waiting for start and goal"
+        #setup gridMap and then wait for service messages/subscribed messages
+        #to come in
         g = GridMap(width/scale, height/scale,shrinkedMap)
         rospy.spin()
         #a_star_server()
