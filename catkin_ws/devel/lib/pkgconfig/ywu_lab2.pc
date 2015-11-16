@@ -1,8 +1,0 @@
-prefix=/home/rbe/catkin_ws/devel
-
-Name: ywu_lab2
-Description: Description of ywu_lab2
-Version: 0.0.0
-Cflags: 
-Libs: -L/home/rbe/catkin_ws/devel/lib 
-Requires: 
